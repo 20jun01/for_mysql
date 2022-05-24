@@ -61,13 +61,10 @@ func main() {
 
 	withLogin := e.Group("")
 	withLogin.Use(checkLogin)
-	withLogin.GET("/countries", getCountriesHandler)
-	withLogin.GET("/countries/:Code", getCitiesHandler)
+	withLogin.Use(printUser)
 	withLogin.GET("/cities/:cityName", getCityInfoHandler)
-	withLogin.GET("/whoami", getWhoAmIHandler)
-	withLogin.GET("/logout", getLogoutHandler)
 
-	e.Start(":11210")
+	e.Start(":11211")
 }
 
 type LoginRequestBody struct {
@@ -78,23 +75,6 @@ type LoginRequestBody struct {
 type User struct {
 	Username   string `json:"username,omitempty"  db:"Username"`
 	HashedPass string `json:"-"  db:"HashedPass"`
-}
-
-type Me struct {
-	Username string `json:"username,omitempty"  db:"username"`
-}
-
-type Country struct {
-	Code string `json:"Code,omitempty"  db:"Code"`
-	Name string `json:"Name,omitempty"  db:"Name"`
-}
-
-func getWhoAmIHandler(c echo.Context) error {
-	sess, _ := session.Get("sessions", c)
-
-	return c.JSON(http.StatusOK, Me{
-		Username: sess.Values["userName"].(string),
-	})
 }
 
 func postSignUpHandler(c echo.Context) error {
@@ -161,19 +141,6 @@ func postLoginHandler(c echo.Context) error {
 	return c.NoContent(http.StatusOK)
 }
 
-func getLogoutHandler(c echo.Context) error {
-	sess, err := session.Get("sessions", c)
-	if err != nil {
-		fmt.Println(err)
-		return c.String(http.StatusInternalServerError, "something wrong in getting session")
-	}
-	sess.Values["userName"] = nil
-	sess.Save(c.Request(), c.Response())
-
-	return c.NoContent(http.StatusOK)
-
-}
-
 func checkLogin(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		sess, err := session.Get("sessions", c)
@@ -191,6 +158,24 @@ func checkLogin(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func printUser(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		sess, err := session.Get("sessions", c)
+		if err != nil {
+			fmt.Println(err)
+			return c.String(http.StatusInternalServerError, "something wrong in getting session")
+		}
+
+		if sess.Values["userName"] == nil {
+			return c.String(http.StatusForbidden, "please login")
+		}
+
+		c.String(http.StatusOK,fmt.Sprintf("%v\n", sess.Values["userName"].(string)))
+
+		return next(c)
+	}
+}
+
 func getCityInfoHandler(c echo.Context) error {
 	cityName := c.Param("cityName")
 
@@ -201,26 +186,4 @@ func getCityInfoHandler(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, city)
-}
-
-func getCountriesHandler(c echo.Context) error {
-	Countries := []Country{}
-	var err error
-	err = db.Select(&Countries, "SELECT Code, Name FROM country")
-	if err != nil {
-		fmt.Println(err)
-		return c.String(http.StatusInternalServerError, "something wrong in getting DB information")
-	}
-	return c.JSON(http.StatusOK, Countries)
-}
-
-func getCitiesHandler(c echo.Context) error {
-	Cities := []City{}
-	Code := c.Param("Code")
-	err := db.Select(&Cities, "SELECT * from city where CountryCode=?", Code)
-	if err != nil {
-		fmt.Println(err)
-		return c.String(http.StatusInternalServerError, "something wrong in getting DB information")
-	}
-	return c.JSON(http.StatusOK, Cities)
 }
