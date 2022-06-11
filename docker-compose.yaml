@@ -1,0 +1,35 @@
+version: "3"
+services:
+  app:
+    build: .
+    # links:
+    #   - mysql
+    # entrypoint:
+    #   - dockerize
+    #   - -timeout
+    #   - 60s
+    #   - -wait
+    #   - tcp://mysql:3306
+    # command: go main.go
+    depends_on:
+      - mysql
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - env.sh
+    
+
+  world-db:
+    image: mariadb:10.3.9
+    restart: always
+    env_file:
+      - env.sh
+    expose:
+      - 3306
+
+  nginx_user12:
+    image: nginx
+    ports:
+      - "11210:80" # 自分の利用するポートに応じて変更してください
+    volumes:
+      - ./nginx/conf.d/:/etc/nginx/conf.d
